@@ -7,12 +7,15 @@
       pkgs = nixpkgs.legacyPackages.${system};
       python = pkgs.python3.withPackages (ps: with ps; [
         numpy
+        cocotb
       ]);
     in {
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           python
           pkgs.ruff
+          pkgs.verilator
+          pkgs.surfer
         ];
       };
     };
