@@ -3,7 +3,12 @@ import math
 
 
 def split(a: float, s: int = 27) -> tuple[float, float]:
-    """Veltkamp trick. Split fp64 (53-bit significand bits) into high/low parts with <= s-1 = 26 significands."""
+    """
+    Veltkamp trick.
+
+    Split fp64 (53-bit significand) into high/low parts
+    with <= s-1 = 26 significand bits.
+    """
     factor = float(2**s + 1)
     c = factor * a
 
@@ -31,8 +36,11 @@ def two_product_fma(a: float, b: float) -> tuple[float, float]:
 
 
 def extract_slice(A: np.ndarray, mu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Matrix-level Veltkamp split. Round each row to approx 26 significand bits using row scales mu."""
+    """
+    Matrix-level Veltkamp split.
 
+    Round each row to ~26 significand bits using row scales mu.
+    """
     # power-of-two scale per row: 2^(ceil( log2( mu_i ) ) + 27)
     exp = np.ceil(np.log2(np.maximum(mu, 1e-300))).astype(int) + 27
     sigma = np.ldexp(np.ones_like(mu), exp)[:, np.newaxis]

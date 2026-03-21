@@ -8,6 +8,7 @@
       python = pkgs.python3.withPackages (ps: with ps; [
         numpy
         cocotb
+        jupyter
       ]);
     in {
       devShells.${system}.default = pkgs.mkShell {
