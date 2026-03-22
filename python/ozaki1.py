@@ -116,6 +116,101 @@ def compensated_matmul(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     return C
 
 
+def _is_prime(n):
+    if n < 2:
+        return False
+    if n < 4:
+        return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i * i <= n:
+        if n % i == 0 or n % (i + 2) == 0:
+            return False
+        i += 6
+    return True
+
+
+def _primes_above(start, count):
+    """Find `count` primes >= start."""
+    primes = []
+    n = start if start % 2 != 0 else start + 1
+    while len(primes) < count:
+        if _is_prime(n):
+            primes.append(n)
+        n += 2
+    return primes
+
+
+def _crt(residues, moduli):
+    """Chinese Remainder Theorem. Recover x from x % m_i = r_i."""
+    M = math.prod(moduli)
+    x = 0
+    for r, m in zip(residues, moduli):
+        Mi = M // m
+        yi = pow(Mi, -1, m)  # modular inverse
+        x += r * Mi * yi
+    x %= M
+    # signed: map to [-M/2, M/2)
+    if x > M // 2:
+        x -= M
+    return x
+
+
+def ozaki2_matmul(A, B, n_moduli=5):
+    """
+    Ozaki Scheme II: CRT-based matmul emulation.
+
+    L modular integer matmuls + CRT reconstruction.
+    Cost: L matmuls (linear) vs L^2 for Ozaki I.
+
+    Each modulus is a ~26-bit prime, so each modular
+    matmul uses small integers that fit in half-precision.
+    """
+    moduli = _primes_above(2**26, n_moduli)
+
+    rows, inner = A.shape
+    _, cols = B.shape
+
+    # per-row scaling for A, per-column scaling for B
+    # (same idea as Ozaki I: align exponents within each row/col)
+    scale = 2**52
+
+    a_row_max = np.max(np.abs(A), axis=1)
+    a_row_max = np.where(a_row_max > 0, a_row_max, 1.0)
+    b_col_max = np.max(np.abs(B), axis=0)
+    b_col_max = np.where(b_col_max > 0, b_col_max, 1.0)
+
+    # python int lists (arbitrary precision, no overflow)
+    A_int = [[int(round(float(A[i, k]) / float(a_row_max[i]) * scale))
+              for k in range(inner)] for i in range(rows)]
+    B_int = [[int(round(float(B[k, j]) / float(b_col_max[j]) * scale))
+              for j in range(cols)] for k in range(inner)]
+
+    # modular matmuls
+    residues = []
+    for m in moduli:
+        Cm = [[0] * cols for _ in range(rows)]
+        for i in range(rows):
+            for j in range(cols):
+                acc = 0
+                for k in range(inner):
+                    acc += (A_int[i][k] % m) * (B_int[k][j] % m)
+                Cm[i][j] = acc % m
+        residues.append(Cm)
+
+    # CRT per element, unscale
+    C = np.empty((rows, cols), dtype=np.float64)
+    for i in range(rows):
+        for j in range(cols):
+            rs = [residues[l][i][j] for l in range(n_moduli)]
+            exact_int = _crt(rs, moduli)
+            C[i, j] = (exact_int / scale**2
+                        * float(a_row_max[i]) * float(b_col_max[j]))
+
+    return C
+
+
 def main():
     rng = np.random.default_rng(42)
 
