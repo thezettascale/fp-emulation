@@ -50,16 +50,23 @@ def fit_pwl(f, breakpoints, n_terms=2):
     return slopes, intercepts, all_terms
 
 
+def _segment_masks(x, breakpoints, n_segments):
+    """Return (index, mask) for each segment. Last segment uses <= on right."""
+    for i in range(n_segments):
+        x0 = breakpoints[i]
+        x1 = breakpoints[i + 1] if i + 1 < len(breakpoints) else np.inf
+        if i == n_segments - 1:
+            yield i, (x >= x0) & (x <= x1)
+
+        else:
+            yield i, (x >= x0) & (x < x1)
+
+
 def eval_pwl(x, breakpoints, slopes, intercepts):
     """Evaluate piecewise linear function."""
     x = np.asarray(x, dtype=np.float64)
-    y = np.empty_like(x)
-    y[:] = slopes[-1] * x + intercepts[-1]
-
-    for i in range(len(slopes)):
-        x0 = breakpoints[i]
-        x1 = breakpoints[i + 1] if i + 1 < len(breakpoints) else np.inf
-        mask = (x >= x0) & (x <= x1) if i == len(slopes) - 1 else (x >= x0) & (x < x1)
+    y = np.full_like(x, slopes[-1] * x + intercepts[-1])
+    for i, mask in _segment_masks(x, breakpoints, len(slopes)):
         y[mask] = slopes[i] * x[mask] + intercepts[i]
 
     return y
@@ -68,24 +75,57 @@ def eval_pwl(x, breakpoints, slopes, intercepts):
 def eval_pwl_shifts(x, breakpoints, slope_terms, intercepts):
     """Evaluate PWL using only shifts and adds. No multiplier."""
     x = np.asarray(x, dtype=np.float64)
-    y = np.empty_like(x)
-    y[:] = intercepts[-1]
-
-    for i in range(len(slope_terms)):
-        x0 = breakpoints[i]
-        x1 = breakpoints[i + 1] if i + 1 < len(breakpoints) else np.inf
-        mask = (
-            (x >= x0) & (x <= x1) if i == len(slope_terms) - 1 else (x >= x0) & (x < x1)
-        )
+    y = np.full_like(x, intercepts[-1])
+    for i, mask in _segment_masks(x, breakpoints, len(slope_terms)):
         xm = x[mask]
-
-        acc = np.zeros_like(xm)
-        for sign, exp in slope_terms[i]:
-            acc += sign * np.ldexp(xm, exp)
-
+        acc = sum(sign * np.ldexp(xm, exp) for sign, exp in slope_terms[i])
         y[mask] = acc + intercepts[i]
 
     return y
+
+
+def _segment_error(f, x0, x1, n_terms=2, n_samples=500):
+    """Max abs error of a single quantized-slope segment."""
+    _, s_q, b = fit_segment(f, x0, x1, n_terms, n_samples)
+    xs = np.linspace(x0, x1, n_samples)
+    return np.max(np.abs(f(xs) - (s_q * xs + b)))
+
+
+def auto_segment(f, x_lo, x_hi, target_mae, n_terms=2, tol=1e-6):
+    """
+    Find fewest segments to approx f under target_mae.
+
+    Greedy left-to-right: binary search for the longest segment
+    that stays under the error bound, then start a new segment.
+    """
+    breakpoints = [x_lo]
+    x = x_lo
+    while x < x_hi - tol:
+        lo, hi = x, x_hi
+
+        # binary search
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            if mid - x < tol:
+                break
+
+            err = _segment_error(f, x, mid, n_terms)
+            if err <= target_mae:
+                lo = mid
+
+            else:
+                hi = mid
+
+        # lo is farthest point under threshold
+        if lo - x < tol:
+            lo = min(x + (x_hi - x_lo) / 1000, x_hi)  # Force min step
+
+        breakpoints.append(lo)
+        x = lo
+
+    # snap last to x_hi
+    breakpoints[-1] = x_hi
+    return breakpoints
 
 
 def max_abs_error(f, breakpoints, slopes, intercepts, n_samples=10000):
