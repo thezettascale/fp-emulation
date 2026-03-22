@@ -1,26 +1,17 @@
-import numpy as np
 import math
+import torch
 
 
 def split(a: float, s: int = 27) -> tuple[float, float]:
-    """
-    Veltkamp trick.
-
-    Split fp64 (53-bit significand) into high/low parts
-    with <= s-1 = 26 significand bits.
-    """
+    """Veltkamp trick: split fp64 into two ~26-bit halves."""
     factor = float(2**s + 1)
     c = factor * a
-
-    # <= 26 bits halves
     a_hi = c - (c - a)
-    a_lo = a - a_hi
-
-    return a_hi, a_lo
+    return a_hi, a - a_hi
 
 
 def two_product(a: float, b: float) -> tuple[float, float]:
-    """Returns (p, e) where a * b = p + e (rounded product + error)."""
+    """(p, e) where a * b = p + e exactly."""
     p = a * b
     a_hi, a_lo = split(a)
     b_hi, b_lo = split(b)
@@ -31,62 +22,45 @@ def two_product(a: float, b: float) -> tuple[float, float]:
 def two_product_fma(a: float, b: float) -> tuple[float, float]:
     """TwoProduct via fused FMA."""
     p = a * b
-    e = math.fma(a, b, -p)  # a * b + (-p)
-    return p, e
+    return p, math.fma(a, b, -p)
 
 
-def extract_slice(A: np.ndarray, mu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Matrix-level Veltkamp split.
-
-    Round each row to ~26 significand bits using row scales mu.
-    """
-    # power-of-two scale per row: 2^(ceil( log2( mu_i ) ) + 27)
-    exp = np.ceil(np.log2(np.maximum(mu, 1e-300))).astype(int) + 27
-    sigma = np.ldexp(np.ones_like(mu), exp)[:, np.newaxis]
-
-    # add-then-subtract rounds to limited bits (same trick as scalar split)
+def extract_slice(A, mu):
+    """Matrix Veltkamp split. Round rows to ~26 sig bits."""
+    exp = torch.ceil(torch.log2(torch.clamp(mu, min=1e-300))).to(torch.int32) + 27
+    sigma = torch.ldexp(torch.ones_like(mu), exp).unsqueeze(1)
     S = (sigma + A) - sigma
-    R = A - S
-
-    return S, R
+    return S, A - S
 
 
-def row_max_abs(A: np.ndarray) -> np.ndarray:
-    return np.max(np.abs(A), axis=1)
+def row_max_abs(A):
+    return torch.max(torch.abs(A), dim=1).values
 
 
-def col_max_abs(B: np.ndarray) -> np.ndarray:
-    return np.max(np.abs(B), axis=0)
+def col_max_abs(B):
+    return torch.max(torch.abs(B), dim=0).values
 
 
-def ozaki_split(A: np.ndarray, n_slices: int) -> list[np.ndarray]:
-    """Split A into n_slices where each has limited significand bits."""
-    slices = []
-    R = A.copy()
+def ozaki_split(A, n_slices):
+    """Split A into n_slices of limited significand bits."""
+    slices, R = [], A.clone()
     for _ in range(n_slices - 1):
-        mu = row_max_abs(R)
-        S, R = extract_slice(R, mu)
+        S, R = extract_slice(R, row_max_abs(R))
         slices.append(S)
 
-    slices.append(R)  # last is remainder
+    slices.append(R)
     return slices
 
 
-def ozaki1_matmul(A: np.ndarray, B: np.ndarray, n_slices: int = 4) -> np.ndarray:
+def ozaki1_matmul(A, B, n_slices=4):
     """
-    Ozaki Scheme I: high-prec matmul via matrix splitting.
-
-    Split A and B into slices, find all cross-products,
-    acc in FP64.
-
-    Cost: n_slices * (n_slices + 1) / 2 matmuls.
+    Ozaki Scheme I — split + cross-product acc in fp64.
+    Cost: n_slices^2 matmuls.
     """
     A_slices = ozaki_split(A, n_slices)
-    B_slices = ozaki_split(B.T, n_slices)  # split B by columns (transpose, split rows)
-    B_slices = [s.T for s in B_slices]  # transpose back
+    B_slices = [s.T for s in ozaki_split(B.T.contiguous(), n_slices)]
 
-    C = np.zeros((A.shape[0], B.shape[1]), dtype=np.float64)
+    C = torch.zeros(A.shape[0], B.shape[1], dtype=torch.float64, device=A.device)
     for i in range(n_slices):
         for j in range(n_slices):
             C += A_slices[i] @ B_slices[j]
@@ -94,17 +68,17 @@ def ozaki1_matmul(A: np.ndarray, B: np.ndarray, n_slices: int = 4) -> np.ndarray
     return C
 
 
-def compensated_matmul(A: np.ndarray, B: np.ndarray) -> np.ndarray:
-    """Reference using TwoProduct + Kahan acc per element."""
+def compensated_matmul(A, B):
+    """Reference: TwoProduct + Kahan acc per element (scalar, slow)."""
     p, q = A.shape
     r = B.shape[1]
-    C = np.zeros((p, r), dtype=np.float64)
+    C = torch.zeros(p, r, dtype=torch.float64, device=A.device)
 
     for i in range(p):
         for j in range(r):
             s, e = 0.0, 0.0
             for k in range(q):
-                prod, ep = two_product_fma(A[i, k], B[k, j])
+                prod, ep = two_product_fma(A[i, k].item(), B[k, j].item())
                 y = prod - e
                 t = s + y
                 e = (t - s) - y
@@ -119,15 +93,20 @@ def compensated_matmul(A: np.ndarray, B: np.ndarray) -> np.ndarray:
 def _is_prime(n):
     if n < 2:
         return False
+
     if n < 4:
         return True
+
     if n % 2 == 0 or n % 3 == 0:
         return False
+
     i = 5
     while i * i <= n:
         if n % i == 0 or n % (i + 2) == 0:
             return False
+
         i += 6
+
     return True
 
 
@@ -138,84 +117,63 @@ def _primes_above(start, count):
     while len(primes) < count:
         if _is_prime(n):
             primes.append(n)
+
         n += 2
+
     return primes
 
 
 def _crt(residues, moduli):
-    """Chinese Remainder Theorem. Recover x from x % m_i = r_i."""
+    """
+    Chinese remainder theorem
+
+    Recover x from x % m_i = r_i (Python ints, arbitrary precision).
+    """
     M = math.prod(moduli)
     x = 0
     for r, m in zip(residues, moduli):
         Mi = M // m
-        yi = pow(Mi, -1, m)  # modular inverse
-        x += r * Mi * yi
+        x += r * Mi * pow(Mi, -1, m)
+
     x %= M
-    # signed: map to [-M/2, M/2)
     if x > M // 2:
         x -= M
+
     return x
 
 
 def ozaki2_matmul(A, B, n_moduli=5):
     """
-    Ozaki Scheme II: CRT-based matmul emulation.
-
-    L modular integer matmuls + CRT reconstruction.
-    Cost: L matmuls (linear) vs L^2 for Ozaki I.
-
-    Each modulus is a ~26-bit prime, so each modular
-    matmul uses small integers that fit in half-precision.
+    Ozaki Scheme II — CRT-based matmul.
+    L modular int64 matmuls + CRT reconstruction. Cost: L matmuls.
     """
     moduli = _primes_above(2**26, n_moduli)
-
-    rows, inner = A.shape
-    _, cols = B.shape
-
-    # per-row scaling for A, per-column scaling for B
-    # (same idea as Ozaki I: align exponents within each row/col)
     scale = 2**52
 
-    a_row_max = np.max(np.abs(A), axis=1)
-    a_row_max = np.where(a_row_max > 0, a_row_max, 1.0)
-    b_col_max = np.max(np.abs(B), axis=0)
-    b_col_max = np.where(b_col_max > 0, b_col_max, 1.0)
+    a_row_max = torch.clamp(row_max_abs(A), min=1e-300)
+    b_col_max = torch.clamp(col_max_abs(B), min=1e-300)
 
-    # python int lists (arbitrary precision, no overflow)
-    A_int = [
-        [int(round(float(A[i, k]) / float(a_row_max[i]) * scale)) for k in range(inner)]
-        for i in range(rows)
-    ]
-    B_int = [
-        [int(round(float(B[k, j]) / float(b_col_max[j]) * scale)) for j in range(cols)]
-        for k in range(inner)
-    ]
+    A_int = torch.round(A / a_row_max.unsqueeze(1) * scale).to(torch.int64)
+    B_int = torch.round(B / b_col_max.unsqueeze(0) * scale).to(torch.int64)
 
-    # modular matmuls
-    residues = []
-    for m in moduli:
-        Cm = [[0] * cols for _ in range(rows)]
-        for i in range(rows):
-            for j in range(cols):
-                acc = 0
-                for k in range(inner):
-                    acc += (A_int[i][k] % m) * (B_int[k][j] % m)
-                Cm[i][j] = acc % m
-        residues.append(Cm)
+    # modular matmuls (vectorized, the expensive part)
+    residues = [(A_int % m) @ (B_int % m) % m for m in moduli]
 
-    # CRT per element, unscale
-    C = np.empty((rows, cols), dtype=np.float64)
+    # CRT per element (python ints for arbitrary precision)
+    rows, cols = A.shape[0], B.shape[1]
+    C = torch.empty(rows, cols, dtype=torch.float64, device=A.device)
     for i in range(rows):
         for j in range(cols):
-            rs = [residues[idx][i][j] for idx in range(n_moduli)]
-            exact_int = _crt(rs, moduli)
-            C[i, j] = exact_int / scale**2 * float(a_row_max[i]) * float(b_col_max[j])
+            rs = [r[i, j].item() for r in residues]
+            C[i, j] = (
+                _crt(rs, moduli) / scale**2 * a_row_max[i].item() * b_col_max[j].item()
+            )
 
     return C
 
 
 def main():
-    rng = np.random.default_rng(42)
+    rng = torch.Generator().manual_seed(42)
 
     sizes = [8, 32, 64]
     n_slices_list = [2, 3, 4, 6]
@@ -224,19 +182,19 @@ def main():
     print("reference: compensated dot product (TwoProduct + Kahan)\n")
 
     for n in sizes:
-        A = rng.standard_normal((n, n))
-        B = rng.standard_normal((n, n))
+        A = torch.randn(n, n, dtype=torch.float64, generator=rng)
+        B = torch.randn(n, n, dtype=torch.float64, generator=rng)
 
         C_naive = A @ B
         C_ref = compensated_matmul(A, B)
 
-        err_naive = np.max(np.abs(C_naive - C_ref))
+        err_naive = torch.max(torch.abs(C_naive - C_ref)).item()
         print(f"n={n}:")
         print(f" naive fp64: max|err| = {err_naive:.3e}")
 
         for ns in n_slices_list:
             C_oz = ozaki1_matmul(A, B, n_slices=ns)
-            err = np.max(np.abs(C_oz - C_ref))
+            err = torch.max(torch.abs(C_oz - C_ref)).item()
             print(f" ozaki1 k={ns:d} ({ns * ns:2d} muls): max|err| = {err:.3e}")
 
         print()
