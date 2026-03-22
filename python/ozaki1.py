@@ -182,10 +182,14 @@ def ozaki2_matmul(A, B, n_moduli=5):
     b_col_max = np.where(b_col_max > 0, b_col_max, 1.0)
 
     # python int lists (arbitrary precision, no overflow)
-    A_int = [[int(round(float(A[i, k]) / float(a_row_max[i]) * scale))
-              for k in range(inner)] for i in range(rows)]
-    B_int = [[int(round(float(B[k, j]) / float(b_col_max[j]) * scale))
-              for j in range(cols)] for k in range(inner)]
+    A_int = [
+        [int(round(float(A[i, k]) / float(a_row_max[i]) * scale)) for k in range(inner)]
+        for i in range(rows)
+    ]
+    B_int = [
+        [int(round(float(B[k, j]) / float(b_col_max[j]) * scale)) for j in range(cols)]
+        for k in range(inner)
+    ]
 
     # modular matmuls
     residues = []
@@ -203,10 +207,9 @@ def ozaki2_matmul(A, B, n_moduli=5):
     C = np.empty((rows, cols), dtype=np.float64)
     for i in range(rows):
         for j in range(cols):
-            rs = [residues[l][i][j] for l in range(n_moduli)]
+            rs = [residues[idx][i][j] for idx in range(n_moduli)]
             exact_int = _crt(rs, moduli)
-            C[i, j] = (exact_int / scale**2
-                        * float(a_row_max[i]) * float(b_col_max[j]))
+            C[i, j] = exact_int / scale**2 * float(a_row_max[i]) * float(b_col_max[j])
 
     return C
 
