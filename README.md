@@ -14,9 +14,9 @@ Emulated high-precision forward pass on a small PDE solver (Poisson/Burgers MLP)
 
 ### Why this is so awkward :P
 
-- Ozaki helps HPC/scientific computing (climate sims, quantum chemistry). Quantized inference comes from LLMs. The two sets of requirements for these groups don't really overlap.
-- HPC people don't think matmul -> activations, Ozaki is just for matmul. LLM servers don't care about FP64, low precision INT8 matmul/act is enough.
-- PINNs benefit from both! High precision matmul/act emulated in cheaper silicon
+- Ozaki helps HPC/scientific computing (climate sims, quantum chemistry). Quantized inference comes from LLMs. The requirements for these groups don't really overlap.
+- HPC people don't work in matmul -> activations, Ozaki is just for matmul. People serving inference don't care about FP64, low precision INT8 matmul/act is enough.
+- PINNs benefit from both! High precision matmul/act emulated in cheaper silicon for fast, stable convergence
 
 ### Autodiff
 
