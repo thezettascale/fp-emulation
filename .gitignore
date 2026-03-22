@@ -1,4 +1,15 @@
-sim_build/
 __pycache__/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+.venv/
+uv.lock
+
+# Hardware sim
+sim_build/
 *.vcd
 results.xml

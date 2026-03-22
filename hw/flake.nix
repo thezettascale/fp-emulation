@@ -6,10 +6,7 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       python = pkgs.python3.withPackages (ps: with ps; [
-        numpy
-        matplotlib
         cocotb
-        jupyter
       ]);
     in {
       devShells.${system}.default = pkgs.mkShell {
