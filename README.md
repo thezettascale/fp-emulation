@@ -52,10 +52,15 @@ RTL in `hw/rtl/`, testbenches in `hw/sim/`, synthesis in `hw/synth/`.
 
 <figure>
 <img src="figures/dt_pinn_loss.png" alt="DT-PINN loss">
-<figcaption>Burgers' equation: vanilla PINN (autograd) vs DT-PINN (matmul derivatives). INT8 Ozaki maintains FP64 precision.</figcaption>
+<figcaption>Burgers' equation training loss. DT-PINN replaces autograd with matmul derivatives. INT8 Ozaki and FP64 curves overlap, (identical precision).</figcaption>
 </figure>
 
-## Try the software prototype
+<figure>
+<img src="figures/dt_pinn_solution.png" alt="DT-PINN solution">
+<figcaption>Burgers' solution at t=1. All three methods converge to the same shock profile — INT8 Ozaki is indistinguishable from native FP64.</figcaption>
+</figure>
+
+## Try:
 
 ```python
 from fp_emulation import ozaki2_int8_matmul, convert
