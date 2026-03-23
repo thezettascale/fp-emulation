@@ -47,7 +47,7 @@ async def test_known_values(dut):
         dut.neg0_i.value = neg0
         dut.sh1_i.value = sh1
         dut.neg1_i.value = neg1
-        await Timer(1, units="ns")
+        await Timer(1, unit="ns")
 
         got = to_signed(dut.y_o.value.to_unsigned())
         assert got == expected, (
@@ -73,7 +73,7 @@ async def test_matches_reference(dut):
         dut.neg0_i.value = neg0
         dut.sh1_i.value = sh1
         dut.neg1_i.value = neg1
-        await Timer(1, units="ns")
+        await Timer(1, unit="ns")
 
         got = to_signed(dut.y_o.value.to_unsigned())
         expected = ref_slope_shift(dx, sh0, neg0, sh1, neg1)

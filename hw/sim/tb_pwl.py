@@ -29,7 +29,7 @@ async def reset(dut):
 @cocotb.test()
 async def test_tanh_sweep(dut):
     """Sweep x in [-4, 4], check ML-PLAC output against math.tanh."""
-    cocotb.start_soon(Clock(dut.clk_i, 10, units="ns").start())
+    cocotb.start_soon(Clock(dut.clk_i, 10, unit="ns").start())
     await reset(dut)
 
     test_points = [i * 0.5 for i in range(-8, 9)]  # -4.0 to 4.0

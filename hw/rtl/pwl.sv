@@ -28,16 +28,16 @@ module pwl (
   logic signed [15:0] bp, off;
   always_comb begin
     case (seg)
-      4'd0: begin bp = -16'sd1024; off = -16'sd238; end
-      4'd1: begin bp = -16'sd483;  off = -16'sd169; end
-      4'd2: begin bp = -16'sd317;  off = -16'sd97;  end
-      4'd3: begin bp = -16'sd211;  off = -16'sd40;  end
-      4'd4: begin bp = -16'sd124;  off =  16'sd0;   end
-      4'd5: begin bp =  16'sd47;   off =  16'sd5;   end
-      4'd6: begin bp =  16'sd156;  off =  16'sd59;  end
-      4'd7: begin bp =  16'sd276;  off =  16'sd140; end
-      4'd8: begin bp =  16'sd434;  off =  16'sd221; end
-      4'd9: begin bp =  16'sd780;  off =  16'sd252; end
+      4'd0: begin bp = -16'sd1024; off = -16'sd256; end
+      4'd1: begin bp = -16'sd483;  off = -16'sd245; end
+      4'd2: begin bp = -16'sd317;  off = -16'sd216; end
+      4'd3: begin bp = -16'sd211;  off = -16'sd173; end
+      4'd4: begin bp = -16'sd124;  off = -16'sd115; end
+      4'd5: begin bp =  16'sd47;   off =  16'sd46;  end
+      4'd6: begin bp =  16'sd156;  off =  16'sd139; end
+      4'd7: begin bp =  16'sd276;  off =  16'sd203; end
+      4'd8: begin bp =  16'sd434;  off =  16'sd239; end
+      4'd9: begin bp =  16'sd780;  off =  16'sd255; end
       default: begin bp = '0; off = '0; end
     endcase
   end
