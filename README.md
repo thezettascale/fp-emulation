@@ -31,7 +31,14 @@ Yosys gate-level cell counts (<code>hw/synth/</code>).
 
 ## Hardware target
 
-On current GPUs, the emulation is slower than native FP64 (L kernel launches, Python overhead). The real target is dedicated fixed-point silicon:
+On current GPUs, Ozaki is slower than native FP64 at small matrix sizes due to L kernel launches and Python overhead. But INT8 tensor cores are ~500x faster than FP64 units (T4: 130 TOPS vs 0.25 TFLOPS), so Ozaki wins at large n where compute (not kernel launch) dominates.
+
+<figure>
+<img src="figures/benchmark.png" alt="Benchmark">
+<figcaption>Matmul latency on T4 GPU. Ozaki overhead is fixed (L kernel launches + CRT), so the ratio shrinks as n grows. At large n, INT8 throughput dominates and Ozaki beats native FP64.</figcaption>
+</figure>
+
+The real target is dedicated fixed-point silicon:
 
 - INT8 MAC is 16x smaller -> same die area, 16x more compute
 - L matmuls pipeline in hardware, no kernel launches
