@@ -1,6 +1,6 @@
 # fp-emulation
 
-FP64-exact PDE solving on 16x smaller silicon — using only INT8 integer arithmetic.
+FP64-exact PDE solving on 16x smaller silicon, using only INT8 integer arithmetic.
 
 ## Why
 
@@ -8,21 +8,21 @@ PDE solvers need FP64. Higher-order derivatives amplify rounding error through t
 
 But FP64 is expensive: 1/32 throughput on consumer GPUs, and even datacenter GPUs dedicate most die area to FP32/FP16/INT8. FP64 units are large and power-hungry.
 
-**What if you could get FP64-exact results from INT8 ops?** That's this project. The software works today (on any GPU with INT8 tensor cores), but the real point is the hardware: INT8 fixed-point silicon is 16x smaller than FP64 for the same precision.
+**What if you could get FP64-exact results from INT8 ops?** This repo shows how and works today (on any GPU with INT8 tensor cores), but the real point is the hardware: INT8 fixed-point silicon is 16x smaller than FP64 for the same precision.
 
 <figure>
 <img src="figures/synth.png" alt="Yosys comparison">
 <figcaption>
 Yosys gate-level cell counts (<code>hw/synth/</code>).
-<b>Left:</b> INT8 vs FP64 MAC — same precision, 16x less silicon.
-<b>Right:</b> ML-PLAC bit-shift slopes vs multiplier — gap widens with data width.
+<b>Left:</b> INT8 vs FP64 MAC. Same precision, 16x less silicon.
+<b>Right:</b> ML-PLAC bit-shift slopes vs multiplier. Gap widens with data width.
 </figcaption>
 </figure>
 
 ## How it works
 
 - **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009) splits floats into integers, does L modular matmuls, reconstructs via Chinese Remainder Theorem. Exact to FP64.
-- **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616) approximates nonlinear functions with piecewise-linear segments using only bit-shifts and adds. No multiplier needed — O(N) area vs multiplier O(N²).
+- **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616) approximates nonlinear functions with piecewise-linear segments using only bit-shifts and adds. No multiplier needed. O(N) area vs multiplier O(N²), perfect replacements for arbitrary precision piecewise linear activations.
 
 <figure>
 <img src="figures/accuracy.png" alt="Accuracy">
@@ -42,13 +42,13 @@ The real target is dedicated fixed-point silicon:
 
 - INT8 MAC is 16x smaller -> same die area, 16x more compute
 - L matmuls pipeline in hardware, no kernel launches
-- ML-PLAC slope cores use only bit-shifts — 16x smaller than multipliers at 64-bit
+- ML-PLAC slope cores use only bit-shifts. 16x smaller than multipliers at 64-bit
 
 RTL in `hw/rtl/`, testbenches in `hw/sim/`, synthesis in `hw/synth/`.
 
 ## Application: DT-PINNs
 
-[DT-PINNs](https://arxiv.org/abs/2205.09332) replace autodiff with Chebyshev spectral differentiation matrices. Derivatives become matmul-dominated — the ideal workload for INT8 Ozaki acceleration.
+[DT-PINNs](https://arxiv.org/abs/2205.09332) replace autodiff with numerical differentiation matrices (the paper uses RBF-FD). We use [Chebyshev spectral](https://people.maths.ox.ac.uk/trefethen/spectral.html) differentiation instead, (dense matmuls suited to INT8 Ozaki acceleration).
 
 <figure>
 <img src="figures/dt_pinn_loss.png" alt="DT-PINN loss">
