@@ -32,12 +32,6 @@ Works on any GPU with INT8 tensor cores, but only better than native on old GPUs
 <figcaption>INT8 Ozaki max absolute error stays near machine epsilon. Relative error grows for near-zero entries (small denominator).</figcaption>
 </figure>
 
-<figure>
-<img src="figures/burgers_loss.png" alt="Burgers training loss">
-<img src="figures/burgers_solution.png" alt="Burgers solution">
-<figcaption>Burgers' equation PINN. Chaotic training dynamics mean different precision -> different local minima. See DT-PINN below for clean comparison.</figcaption>
-</figure>
-
 ## Fixed-point acceleration
 
 On SOTA GPUs, Ozaki fp emulation is slower than native FP64 (L kernel launches, Python overhead). The real target is dedicated fixed-point silicon!
@@ -66,7 +60,6 @@ RTL in `hw/rtl/`, testbenches in `hw/sim/`.
 
 <figure>
 <img src="figures/dt_pinn_loss.png" alt="DT-PINN loss">
-<img src="figures/dt_pinn_solution.png" alt="DT-PINN solution">
 <figcaption>Burgers' equation: vanilla PINN (autograd) vs DT-PINN (matmul derivatives). INT8 Ozaki maintains FP64 precision.</figcaption>
 </figure>
 
