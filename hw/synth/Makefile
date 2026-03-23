@@ -33,5 +33,6 @@ yosys -p "read_verilog -sv $(RTL)/$(1).sv; chparam -set $(2) $(1); synth -top $(
 	2>/dev/null | grep -oP '\d+(?=\s+cells$$)' | tail -1
 endef
 
+
 clean:
 	rm -rf *.log

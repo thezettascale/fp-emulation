@@ -1,6 +1,66 @@
 # fp-emulation
 
-FP64-exact matmul and activations from INT8 integer ops.
+FP64-exact PDE solving on 16x smaller silicon — using only INT8 integer arithmetic.
+
+## Why
+
+PDE solvers need FP64. Higher-order derivatives amplify rounding error through the chain rule. FP32 breaks.
+
+But FP64 is expensive: 1/32 throughput on consumer GPUs, and even datacenter GPUs dedicate most die area to FP32/FP16/INT8. FP64 units are large and power-hungry.
+
+**What if you could get FP64-exact results from INT8 ops?** That's this project. The software works today (on any GPU with INT8 tensor cores), but the real point is the hardware: INT8 fixed-point silicon is 16x smaller than FP64 for the same precision.
+
+<figure>
+<img src="figures/synth.png" alt="Yosys comparison">
+<figcaption>
+Yosys gate-level cell counts (<code>hw/synth/</code>).
+<b>Left:</b> INT8 vs FP64 MAC — same precision, 16x less silicon.
+<b>Right:</b> ML-PLAC bit-shift slopes vs multiplier — gap widens with data width.
+</figcaption>
+</figure>
+
+## How it works
+
+- **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009) splits floats into integers, does L modular matmuls, reconstructs via Chinese Remainder Theorem. Exact to FP64.
+- **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616) approximates nonlinear functions with piecewise-linear segments using only bit-shifts and adds. No multiplier needed — O(N) area vs multiplier O(N²).
+
+<figure>
+<img src="figures/accuracy.png" alt="Accuracy">
+<figcaption>INT8 Ozaki max absolute error stays near machine epsilon. Relative error grows for near-zero entries (small denominator).</figcaption>
+</figure>
+
+## Hardware target
+
+On current GPUs, Ozaki is slower than native FP64 at small matrix sizes due to L kernel launches and Python overhead. But INT8 tensor cores are ~500x faster than FP64 units (T4: 130 TOPS vs 0.25 TFLOPS), so Ozaki wins at large n where compute (not kernel launch) dominates.
+
+<figure>
+<img src="figures/benchmark.png" alt="Benchmark">
+<figcaption>Matmul latency on T4 GPU. Ozaki overhead is fixed (L kernel launches + CRT), so the ratio shrinks as n grows. At large n, INT8 throughput dominates and Ozaki beats native FP64.</figcaption>
+</figure>
+
+The real target is dedicated fixed-point silicon:
+
+- INT8 MAC is 16x smaller -> same die area, 16x more compute
+- L matmuls pipeline in hardware, no kernel launches
+- ML-PLAC slope cores use only bit-shifts — 16x smaller than multipliers at 64-bit
+
+RTL in `hw/rtl/`, testbenches in `hw/sim/`, synthesis in `hw/synth/`.
+
+## Application: DT-PINNs
+
+[DT-PINNs](https://arxiv.org/abs/2205.09332) replace autodiff with Chebyshev spectral differentiation matrices. Derivatives become matmul-dominated — the ideal workload for INT8 Ozaki acceleration.
+
+<figure>
+<img src="figures/dt_pinn_loss.png" alt="DT-PINN loss">
+<figcaption>Burgers' equation training loss. DT-PINN replaces autograd with matmul derivatives. INT8 Ozaki and FP64 curves overlap, (identical precision).</figcaption>
+</figure>
+
+<figure>
+<img src="figures/dt_pinn_solution.png" alt="DT-PINN solution">
+<figcaption>Burgers' solution at t=1. All three methods converge to the same shock profile — INT8 Ozaki is indistinguishable from native FP64.</figcaption>
+</figure>
+
+## Try:
 
 ```python
 from fp_emulation import ozaki2_int8_matmul, convert
@@ -9,63 +69,13 @@ C = ozaki2_int8_matmul(A, B)   # FP64-exact via INT8 tensor cores
 model = convert(model)         # swap all nn.Linear layers
 ```
 
-## Problem
+[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb) — accuracy, benchmarks, Burgers PINN
+[`notebooks/05_dt_pinn.ipynb`](notebooks/05_dt_pinn.ipynb) — DT-PINN with Ozaki INT8
 
-PDE solvers need FP64. Higher-order derivatives amplify rounding error through the chain rule. FP32 breaks.
-
-FP64 is expensive:
-- 1/32 throughput on consumer GPUs (RTX 3090, T4)
-- Even datacenter GPUs dedicate most die to FP32/FP16/INT8
-- FP64 units are large and power-hungry
-
-## Solution
-
-INT8 integer ops, FP64-exact results.
-
-- **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009) splits floats into integers, does L modular matmuls, reconstructs via Chinese Remainder Theorem (CRT). Exact to FP64!
-- **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616) approximates any nonlinear function with piecewise-linear segments using only bit-shifts and adds at a chosen/arbitrary precision and accuracy. No multiplier, perfect for arbitrary precision deep learning.
-
-Works on any GPU with INT8 tensor cores, but only better than native on old GPUs. Autodiff via `torch.autograd`. The real benefit is for our hardware.
-
-<figure>
-<img src="figures/accuracy.png" alt="Accuracy">
-<figcaption>INT8 Ozaki matches native FP64 to machine epsilon across all matrix sizes.</figcaption>
-</figure>
-
-<figure>
-<img src="figures/burgers_loss.png" alt="Burgers training loss">
-<img src="figures/burgers_solution.png" alt="Burgers solution">
-<figcaption>Burgers' equation PINN: discontinuity at x=0. FP32 fails near the discontinuity. INT8 Ozaki tracks FP64.</figcaption>
-</figure>
-
-## Fixed-point acceleration
-
-On GPUs, Ozaki fp emulation is slower than native FP64 (L kernel launches, Python overhead). The real target is dedicated fixed-point silicon.
-
-Replace FP64 hardware with INT8:
-- INT8 MAC is 16x smaller. Same die area -> 16x more compute.
-- L matmuls pipeline in hardware. No kernel launches.
-- ML-PLAC slope cores scale O(N) vs multiplier O(N²). 16x smaller at 64-bit.
-
-<figure>
-<img src="figures/synth.png" alt="Yosys comparison">
-<figcaption>
-Yosys gate-level cell counts (<code>hw/synth/</code>).
-<b>Left:</b> INT8 vs FP64 MAC. Same precision, 16x less silicon. Awesome for us!
-<b>Right:</b> ML-PLAC bit-shifts vs multiplier. Gap widens with data width.
-</figcaption>
-</figure>
-
-RTL in `hw/rtl/`, testbenches in `hw/sim/`.
-
-## Try it
-
-[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb)
-
-Run free on Colab with T4 GPU (fast INT8, crippled FP64):
+Run free on Colab with T4 GPU (fast INT8, slow native FP64):
 1. Fork this repo
-2. Open in Colab (File -> Open notebook -> GitHub -> your personal fork)
-3. Set runtime to T4 (Runtime -> Change runtime type -> T4)
+2. Open in Colab (File -> Open notebook -> GitHub -> your fork)
+3. Set runtime to T4
 
 ## References
 

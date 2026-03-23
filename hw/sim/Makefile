@@ -21,11 +21,13 @@ ifdef TRACE
 EXTRA_ARGS   += --trace
 endif
 
-.PHONY: all
+.PHONY: all run
 all:
-	$(MAKE) TEST=mac
-	$(MAKE) TEST=pwl
-	$(MAKE) TEST=slope
+	$(MAKE) run TEST=mac
+	$(MAKE) run TEST=pwl
+	$(MAKE) run TEST=slope
+
+run: sim
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
