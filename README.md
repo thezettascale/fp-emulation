@@ -1,10 +1,10 @@
 # fp-emulation
 
-FP64-exact results from INT8 integer ops. Software prototype + RTL for dedicated silicon.
+FP64-exact results from INT8 integer ops.
 
 ## Problem
 
-PDE solvers need FP64. FP32 breaks because higher-order derivatives amplify rounding error. But FP64 is expensive: 1/32 throughput on consumer GPUs, large and power-hungry units.
+PDE solvers often use FP64. FP32 breaks because higher-order derivatives amplify rounding error. But FP64 is expensive: 1/32 throughput on consumer GPUs, large and power-hungry units.
 
 ## Approach
 
