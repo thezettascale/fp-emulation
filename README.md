@@ -13,7 +13,7 @@ PDE solvers need FP64. FP32 breaks because higher-order derivatives amplify roun
 
 <figure>
 <img src="figures/accuracy.png" alt="Accuracy">
-<figcaption>Max absolute error near machine epsilon. Relative error grows for near-zero entries (small denominator).</figcaption>
+<figcaption>Ozaki vs <code>torch.matmul</code>. Max absolute error stays within O(n * eps). Relative error grows for near-zero entries (small denominator, not precision problem).</figcaption>
 </figure>
 
 ## GPU benchmarks
