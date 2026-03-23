@@ -3,7 +3,7 @@ import torch
 
 
 def quantize_slope(s, n_terms=2, min_exp=-16, max_exp=4):
-    """Approximate slope as sum of n_terms signed powers of 2 (greedy)."""
+    """Approx slope as sum of n_terms signed powers of 2"""
     terms = []
     remaining = s
     for _ in range(n_terms):
@@ -50,6 +50,7 @@ def fit_pwl(f, breakpoints, n_terms=2):
         slopes.append(s_q)
         intercepts.append(b)
         all_terms.append(terms)
+
     return slopes, intercepts, all_terms
 
 
@@ -59,8 +60,10 @@ def _segment_masks(x, breakpoints, n_segments):
         left = x >= breakpoints[i]
         if i == n_segments - 1:
             right = x <= breakpoints[i + 1] if i + 1 < len(breakpoints) else True
+
         else:
             right = x < breakpoints[i + 1]
+
         yield i, left & right
 
 
@@ -68,9 +71,11 @@ def eval_pwl(x, breakpoints, slopes, intercepts):
     """Evaluate piecewise linear function."""
     if not isinstance(x, torch.Tensor):
         x = torch.as_tensor(x, dtype=torch.float64)
+
     y = slopes[-1] * x + intercepts[-1]
     for i, mask in _segment_masks(x, breakpoints, len(slopes)):
         y[mask] = slopes[i] * x[mask] + intercepts[i]
+
     return y
 
 
@@ -82,7 +87,9 @@ def eval_pwl_shifts(x, breakpoints, slope_terms, intercepts):
     y = torch.full_like(x, intercepts[-1])
     for i, mask in _segment_masks(x, breakpoints, len(slope_terms)):
         xm = x[mask]
-        acc = sum(sign * xm * 2.0**exp for sign, exp in slope_terms[i])
+        acc = sum(
+            (sign * xm * 2.0**exp for sign, exp in slope_terms[i]), torch.zeros_like(xm)
+        )
         y[mask] = acc + intercepts[i]
 
     return y
@@ -109,8 +116,10 @@ def auto_segment(f, x_lo, x_hi, target_mae, n_terms=2, tol=1e-6):
             mid = (lo + hi) / 2
             if mid - x < tol:
                 break
+
             if _segment_error(f, x, mid, n_terms) <= target_mae:
                 lo = mid
+
             else:
                 hi = mid
 

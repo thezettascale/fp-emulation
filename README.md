@@ -27,6 +27,7 @@ Emulated high-precision forward pass on a small PDE solver (Poisson/Burgers MLP)
 
 - [TwoProduct/TwoSum for exact sum and dotprod](https://doi.org/10.1137/030601818)
 - [Ozaki II Scheme for matmul and dotprod](https://arxiv.org/abs/2504.08009)
+- [Ozaki more](https://dl.acm.org/doi/epdf/10.1145/3731599.3767539)
 - [ML-PLAC for bit-shift only piecewise linear](https://www.mdpi.com/2076-3417/12/20/10616)
 - [DT-PINNs: meshless discretizations replacing autodiff](https://arxiv.org/abs/2205.09332)
 - [What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
