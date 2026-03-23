@@ -14,6 +14,7 @@
           python
           pkgs.ruff
           pkgs.verilator
+          pkgs.yosys
           pkgs.surfer
         ];
       };

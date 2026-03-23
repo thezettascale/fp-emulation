@@ -36,7 +36,7 @@ PINNs benefit because they need both:
 [`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb)
 
 To try for free on Nvidia T4 GPU:
-1. Make a peronsal fork this repo
+1. Make a personal fork of this repo
 2. Open notebook in Google Colab (File -> Open notebook → GitHub → your fork)
 3. Set runtime to T4 GPU (Runtime -> Change runtime type → T4)
 
