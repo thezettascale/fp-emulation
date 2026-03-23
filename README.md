@@ -1,6 +1,6 @@
 # fp-emulation
 
-FP64-exact matmul from INT8 ops. Drop-in for PyTorch.
+FP64-exact matmul and activations from INT8 integer ops.
 
 ```python
 from fp_emulation import ozaki2_int8_matmul, convert
@@ -9,46 +9,62 @@ C = ozaki2_int8_matmul(A, B)   # FP64-exact via INT8 tensor cores
 model = convert(model)         # swap all nn.Linear layers
 ```
 
-## Why
+## Problem
 
-FP32 loses precision in PDE residuals (chain rule through 2nd/3rd derivatives). FP64 fixes this but runs at 1/32 throughput on consumer GPUs (non-SOTA).
+PDE solvers need FP64. Higher-order derivatives amplify rounding error through the chain rule. FP32 breaks.
 
-This gives you FP64 precision using INT8 tensor cores for older GPUs ([Ozaki scheme II](https://arxiv.org/abs/2504.08009)): split into integers, L modular matmuls via small primes, CRT reconstruct. Exact to FP64.
+FP64 is expensive:
+- 1/32 throughput on consumer GPUs (RTX 3090, T4)
+- Even datacenter GPUs dedicate most die to FP32/FP16/INT8
+- FP64 units are large and power-hungry
 
-## Hardware case
+## Solution
 
-On SOTA GPUs, Ozaki is slower than native FP64 (L kernel launches, overhead). The real target is dedicated fixed-point silicon:
+INT8 integer ops, FP64-exact results.
 
-- L matmuls pipeline in hardware, no kernel launch overhead
-- CRT is a fixed datapath, not a general-purpose kernel
+- **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009) splits floats into integers, does L modular matmuls, reconstructs via Chinese Remainder Theorem (CRT). Exact to FP64!
+- **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616) approximates any nonlinear function with piecewise-linear segments using only bit-shifts and adds at a chosen/arbitrary precision and accuracy. No multiplier, perfect for arbitrary precision deep learning.
 
-<figure>
-<img src="figures/synth.png" alt="Synthesis comparison">
-<figcaption>
-<b>Left:</b> INT8 MAC is 16x smaller than FP64 MAC. Same die area fits 16x more cores, 16x more throughput.
-<b>Right:</b> <a href="https://www.mdpi.com/2076-3417/12/20/10616">ML-PLAC</a> replaces multipliers with VERY CHEAP bit-shifts for piecewise-linear activations. Multiplier grows O(N²), shift-add grows O(N). 16x smaller at 64-bit!
-Cell counts from Yosys open-source synthesis (<code>hw/synth/</code>).
-</figcaption>
-</figure>
-
-## Demo
-
-[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb)
+Works on any GPU with INT8 tensor cores, but only better than native on old GPUs. Autodiff via `torch.autograd`. The real benefit is for our hardware.
 
 <figure>
 <img src="figures/accuracy.png" alt="Accuracy">
-<figcaption>Ozaki INT8 matmul matches native FP64 to machine epsilon across all matrix sizes.</figcaption>
+<figcaption>INT8 Ozaki matches native FP64 to machine epsilon across all matrix sizes.</figcaption>
 </figure>
 
 <figure>
 <img src="figures/burgers_loss.png" alt="Burgers training loss">
 <img src="figures/burgers_solution.png" alt="Burgers solution">
-<figcaption>Burgers' equation PINN (u_t + u u_x = v u_xx, steep shock). FP32 struggles near the discontinuity. INT8 Ozaki tracks FP64.</figcaption>
+<figcaption>Burgers' equation PINN: discontinuity at x=0. FP32 fails near the discontinuity. INT8 Ozaki tracks FP64.</figcaption>
 </figure>
 
-Run on Colab with T4 GPU (fast INT8, crippled FP64):
+## Fixed-point acceleration
+
+On GPUs, Ozaki fp emulation is slower than native FP64 (L kernel launches, Python overhead). The real target is dedicated fixed-point silicon.
+
+Replace FP64 hardware with INT8:
+- INT8 MAC is 16x smaller. Same die area -> 16x more compute.
+- L matmuls pipeline in hardware. No kernel launches.
+- ML-PLAC slope cores scale O(N) vs multiplier O(N²). 16x smaller at 64-bit.
+
+<figure>
+<img src="figures/synth.png" alt="Yosys comparison">
+<figcaption>
+Yosys gate-level cell counts (<code>hw/synth/</code>).
+<b>Left:</b> INT8 vs FP64 MAC. Same precision, 16x less silicon. Awesome for us!
+<b>Right:</b> ML-PLAC bit-shifts vs multiplier. Gap widens with data width.
+</figcaption>
+</figure>
+
+RTL in `hw/rtl/`, testbenches in `hw/sim/`.
+
+## Try it
+
+[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb)
+
+Run free on Colab with T4 GPU (fast INT8, crippled FP64):
 1. Fork this repo
-2. Open notebook in Colab (File -> Open notebook -> GitHub -> your fork)
+2. Open in Colab (File -> Open notebook -> GitHub -> your personal fork)
 3. Set runtime to T4 (Runtime -> Change runtime type -> T4)
 
 ## References
