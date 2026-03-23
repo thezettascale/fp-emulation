@@ -15,7 +15,7 @@ Higher-order PDE residuals (2nd/3rd derivatives) accumulate rounding error throu
 
 Ozaki scheme II emulates FP64 using INT8 tensor cores: scale to integers, L modular matmuls via small primes, CRT reconstruction. Result is exact to FP64.
 
-## The fixed-point accelerator case
+## Dedicated fixed-point accelerator
 
 On SOTA GPUs, Ozaki is slower than native FP64 (L kernel launches, GPU already has FP64 units). The point is dedicated fixed-point hardware.
 
@@ -23,6 +23,26 @@ A dedicated INT8 ASIC eliminates FP64 hardware entirely:
 - INT8 MACs are tiny, pack thousands on small die
 - L matmuls pipeline in hardware (no kernel launch overhead)
 - CRT is a fixed datapath, not a general-purpose kernel
+
+Yosys synthesis (gate-level cell counts, `hw/synth/`):
+
+| Unit | Cells |
+|------|------:|
+| INT8 MAC (Q4.4) | 1,239 |
+| FP64 MAC | 20,071 |
+
+| Activation (tanh, 10-seg) | Cells |
+|----------------------------|------:|
+| PWL with multiplier | 2,162 |
+| ML-PLAC (shifts only) | 2,046 |
+
+| Slope core width | Multiplier | Shift-add |
+|-----------------:|-----------:|----------:|
+| 16-bit | 1,840 | 384 |
+| 32-bit | 7,137 | 817 |
+| 64-bit | 27,578 | 1,683 |
+
+Multiplier scales O(N^2), shift-add scales O(N). At 64-bit the shift-add slope core is 16x smaller.
 
 PINNs benefit because they need both:
 - High precision matmul (Ozaki)
@@ -33,12 +53,16 @@ PINNs benefit because they need both:
 
 ## Demo
 
-[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb)
+[`notebooks/04_demo.ipynb`](notebooks/04_demo.ipynb) — accuracy, benchmarks, Burgers' equation PINN.
+
+![Accuracy](figures/accuracy.png)
+![Burgers loss](figures/burgers_loss.png)
+![Burgers solution](figures/burgers_solution.png)
 
 To try for free on Nvidia T4 GPU:
 1. Make a personal fork of this repo
-2. Open notebook in Google Colab (File -> Open notebook → GitHub → your fork)
-3. Set runtime to T4 GPU (Runtime -> Change runtime type → T4)
+2. Open notebook in Google Colab (File -> Open notebook -> GitHub -> your fork)
+3. Set runtime to T4 GPU (Runtime -> Change runtime type -> T4)
 
 T4 is ideal: fast INT8 tensor cores, crippled FP64 (1/32 rate).
 
