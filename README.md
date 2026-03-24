@@ -8,7 +8,7 @@ PDE solvers often use FP64. FP32 breaks because higher-order derivatives amplify
 
 ## Approach
 
-- **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009). Split floats to integers, L modular matmuls, CRT reconstruction. FP64-exact.
+- **Matmul**: [Ozaki scheme II](https://arxiv.org/abs/2504.08009). Split floats to integers, do several INT8 matmuls (one per small prime modulus), reconstruct via Chinese Remainder Theorem. FP64-exact.
 - **Activations**: [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616). Piecewise-linear via bit-shifts and adds only. No multiplier. O(N) area vs O(N²).
 
 <figure>
@@ -18,7 +18,7 @@ PDE solvers often use FP64. FP32 breaks because higher-order derivatives amplify
 
 ## GPU benchmarks
 
-On GPUs, Ozaki is slower at small n due to L kernel launches and Python overhead. At large n, INT8 throughput wins. T4 has 130 TOPS INT8 vs 0.25 TFLOPS FP64.
+On GPUs, Ozaki is slower at small n because each matmul becomes several kernel launches (one per modulus) plus Python overhead. At large n, INT8 throughput wins. T4 has 130 TOPS INT8 vs 0.25 TFLOPS FP64.
 
 <figure>
 <img src="figures/benchmark.png" alt="Benchmark">
@@ -30,7 +30,7 @@ On GPUs, Ozaki is slower at small n due to L kernel launches and Python overhead
 The real point: dedicated fixed-point silicon.
 
 - INT8 MAC is 16x smaller than FP64. Same die area -> 16x more compute.
-- L matmuls pipeline in hardware. No kernel launches.
+- The per-modulus matmuls pipeline in hardware. No kernel launches.
 - ML-PLAC slopes use only bit-shifts. 16x smaller than multipliers at 64-bit.
 
 <figure>
