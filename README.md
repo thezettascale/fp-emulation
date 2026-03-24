@@ -37,7 +37,7 @@ The real point: dedicated fixed-point silicon.
 <img src="figures/synth.png" alt="Yosys comparison">
 <figcaption>
 Yosys gate-level cell counts (<code>hw/synth/</code>).
-<b>Left:</b> INT8 vs FP64 MAC.
+<b>Left:</b> MAC unit comparison. FP8 + stochastic rounding (418 cells) is 3x smaller than INT8 Ozaki (1,239) and 48x smaller than FP64 (20,071).
 <b>Right:</b> ML-PLAC shifts vs multiplier, gap widens with width.
 </figcaption>
 </figure>
@@ -81,4 +81,5 @@ Run on Colab with T4 GPU:
 - [ML-PLAC](https://www.mdpi.com/2076-3417/12/20/10616)
 - [DT-PINNs](https://arxiv.org/abs/2205.09332)
 - [Chebyshev spectral methods](https://people.maths.ox.ac.uk/trefethen/spectral.html)
+- [Lazy stochastic rounding FP MAC](https://arxiv.org/abs/2404.14010)
 - [What Every CS Should Know About FP](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)

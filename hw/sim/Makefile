@@ -14,6 +14,10 @@ else ifeq ($(TEST),slope)
   VERILOG_SOURCES     = ../rtl/slope_shift.sv
   TOPLEVEL            = slope_shift
   COCOTB_TEST_MODULES = tb_slope
+else ifeq ($(TEST),mac_sr)
+  VERILOG_SOURCES     = ../rtl/mac_sr.sv
+  TOPLEVEL            = mac_sr
+  COCOTB_TEST_MODULES = tb_mac_sr
 endif
 
 SIM_BUILD     = sim_build/$(TEST)
@@ -26,6 +30,7 @@ all:
 	$(MAKE) run TEST=mac
 	$(MAKE) run TEST=pwl
 	$(MAKE) run TEST=slope
+	$(MAKE) run TEST=mac_sr
 
 run: sim
 

@@ -3,20 +3,21 @@ import numpy as np
 from pathlib import Path
 
 # yosys cell counts (from `make` in hw/synth/)
-MAC = {"INT8 MAC": 1239, "FP64 MAC": 20071}
+MAC = {"INT8\n(Ozaki)": 1239, "FP8+SR": 418, "FP64": 20071}
 SLOPE_MUL = {16: 1840, 32: 7137, 64: 27578}
 SLOPE_SHIFT = {16: 384, 32: 817, 64: 1683}
 
-GREEN, RED = "#4CAF50", "#F44336"
+GREEN, BLUE, RED = "#4CAF50", "#2196F3", "#F44336"
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 # MAC
 ax = axes[0]
 names, vals = list(MAC.keys()), list(MAC.values())
-ax.bar(names, vals, color=[GREEN, RED], width=0.5)
+colors = [GREEN, BLUE, RED]
+ax.bar(names, vals, color=colors, width=0.5)
 ax.set_ylabel("Cells")
-ax.set_title("MAC unit (16x smaller)")
+ax.set_title("MAC unit comparison")
 for i, v in enumerate(vals):
     ax.text(i, v + 400, f"{v:,}", ha="center", fontsize=10)
 ax.set_ylim(0, 24000)

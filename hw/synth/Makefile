@@ -7,6 +7,7 @@ all: macs activations slopes
 macs:
 	@echo "MACs"
 	@printf "  int8:   %6s cells\n" "$$($(call synth_p,mac,QI 4 QF 4))"
+	@printf "  fp8+sr: %6s cells\n" "$$($(call synth,mac_sr))"
 	@printf "  fp64:   %6s cells\n" "$$($(call synth,mac_fp64))"
 	@echo
 
